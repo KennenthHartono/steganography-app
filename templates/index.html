@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StegoCrypt — Hidden Message Tool</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Outfit:wght@400;600;800;900&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #06080f;
+      --surface: #0c0f1a;
+      --surface2: #131724;
+      --border: rgba(255,255,255,0.06);
+      --border-hover: rgba(0,229,255,0.3);
+      --cyan: #00e5ff;
+      --magenta: #ff00aa;
+      --text: #e8edf8;
+      --muted: #526070;
+      --danger: #ff4d6d;
+      --success: #00e5ff;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Outfit', sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    #particle-canvas {
+      position: fixed; inset: 0;
+      pointer-events: none; z-index: 0;
+    }
+
+    /* Scanline */
+    body::after {
+      content: '';
+      position: fixed; inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent, transparent 2px,
+        rgba(0,0,0,0.06) 2px, rgba(0,0,0,0.06) 4px
+      );
+      pointer-events: none; z-index: 999;
+    }
+
+    /* Grid */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(0,229,255,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,229,255,0.025) 1px, transparent 1px);
+      background-size: 44px 44px;
+      pointer-events: none; z-index: 0;
+    }
+
+    .container {
+      position: relative; z-index: 1;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 3.5rem 1.5rem 6rem;
+    }
+
+    /* ── Header ── */
+    header {
+      text-align: center;
+      margin-bottom: 3.5rem;
+      animation: fadeDown 0.8s ease both;
+    }
+
+    @keyframes fadeDown {
+      from { opacity: 0; transform: translateY(-20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .logo-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(0,229,255,0.06);
+      border: 1px solid rgba(0,229,255,0.18);
+      border-radius: 999px; padding: 6px 18px;
+      font-family: 'Space Mono', monospace;
+      font-size: 10px; color: var(--cyan);
+      letter-spacing: 0.18em; text-transform: uppercase;
+      margin-bottom: 1.5rem;
+    }
+
+    .logo-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--cyan); flex-shrink: 0;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%,100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 0 rgba(0,229,255,0.5); }
+      50%      { opacity: 0.4; transform: scale(0.8); box-shadow: 0 0 0 6px rgba(0,229,255,0); }
+    }
+
+    /*
+      DEFINITIVE FIX:
+      background-clip:text clips to the *ink* bounding box of each glyph,
+      which for descender letters (g, p, y) extends below the baseline.
+      When line-height is tight, the containing block's paint area doesn't
+      cover that region, so the bottom of the glyph gets cut.
+
+      Solution: make h1 display:inline-block so its height = actual ink height,
+      then wrap in a block div (text-align:center). Give h1 generous
+      padding-bottom so the background gradient extends into the descender zone.
+      padding-bottom on inline-block DOES expand the paint area for background-clip.
+    */
+    .h1-wrap {
+      display: block;
+      text-align: center;
+      overflow: visible;
+      margin-bottom: 0.3rem;
+    }
+
+    h1 {
+      display: inline-block;
+      font-family: 'Outfit', sans-serif;
+      font-size: clamp(2.6rem, 7.5vw, 4.2rem);
+      font-weight: 900;
+      line-height: 1.3;               /* generous so descender has room */
+      letter-spacing: -0.02em;
+      padding-bottom: 0.25em;         /* extra paint area below baseline */
+      overflow: visible;
+      background: linear-gradient(120deg, var(--cyan) 0%, #ffffff 45%, var(--magenta) 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      color: transparent;
+      position: relative;
+      margin-bottom: 0;
+    }
+
+    /* Glitch */
+    h1::before, h1::after {
+      content: 'StegoCrypt';
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      font-family: 'Orbitron', sans-serif;
+      background: inherit;
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent; color: transparent;
+      opacity: 0; pointer-events: none;
+    }
+
+    h1:hover::before { animation: glitch1 0.35s steps(2) forwards; }
+    h1:hover::after  { animation: glitch2 0.35s steps(2) forwards 0.05s; }
+
+    @keyframes glitch1 {
+      0%   { clip-path: inset(15% 0 65% 0); transform: translate(-4px); opacity: 0.8; filter: hue-rotate(180deg); }
+      50%  { clip-path: inset(55% 0 20% 0); transform: translate(4px);  opacity: 0.8; filter: hue-rotate(90deg); }
+      100% { opacity: 0; }
+    }
+    @keyframes glitch2 {
+      0%   { clip-path: inset(40% 0 45% 0); transform: translate(4px);  opacity: 0.6; filter: hue-rotate(-90deg); }
+      50%  { clip-path: inset(70% 0 5% 0);  transform: translate(-4px); opacity: 0.6; filter: hue-rotate(45deg); }
+      100% { opacity: 0; }
+    }
+
+    .subtitle {
+      font-size: 0.88rem; color: var(--muted);
+      font-family: 'Space Mono', monospace; letter-spacing: 0.03em;
+    }
+
+    /* ── Tabs ── */
+    .tab-row {
+      display: flex; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 16px;
+      padding: 6px; gap: 6px; margin-bottom: 1.75rem;
+      animation: fadeUp 0.8s 0.1s ease both;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .tab-btn {
+      flex: 1; padding: 13px 20px;
+      background: transparent; border: 1px solid transparent;
+      border-radius: 11px; font-family: 'Outfit', sans-serif;
+      font-size: 0.95rem; font-weight: 600; color: var(--muted);
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+    }
+
+    .tab-btn svg { opacity: 0.5; transition: opacity 0.25s; }
+
+    .tab-btn.active {
+      background: var(--surface2);
+      border-color: rgba(0,229,255,0.28);
+      color: var(--cyan);
+      box-shadow: 0 0 25px rgba(0,229,255,0.09), inset 0 1px 0 rgba(0,229,255,0.08);
+      transform: scale(1.02);
+    }
+
+    .tab-btn.active svg { opacity: 1; }
+    .tab-btn:hover:not(.active) { color: var(--text); background: rgba(255,255,255,0.03); transform: scale(1.01); }
+
+    /* ── Panel ── */
+    .panel-wrap { perspective: 1200px; animation: fadeUp 0.8s 0.2s ease both; }
+
+    .panel {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 22px; padding: 2.25rem; display: none;
+      transform-style: preserve-3d;
+      transition: transform 0.12s ease, box-shadow 0.3s ease;
+      position: relative; overflow: hidden;
+    }
+
+    .panel::before {
+      content: ''; position: absolute; top: -100px; right: -100px;
+      width: 240px; height: 240px;
+      background: radial-gradient(circle, rgba(0,229,255,0.07) 0%, transparent 70%);
+      pointer-events: none; z-index: 0;
+    }
+    .panel::after {
+      content: ''; position: absolute; bottom: -80px; left: -80px;
+      width: 200px; height: 200px;
+      background: radial-gradient(circle, rgba(255,0,170,0.05) 0%, transparent 70%);
+      pointer-events: none; z-index: 0;
+    }
+
+    .panel.active { display: block; animation: panelIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
+    @keyframes panelIn {
+      from { opacity: 0; transform: translateY(12px) scale(0.98); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    /* ── Upload zone ── */
+    .upload-zone {
+      border: 1.5px dashed rgba(0,229,255,0.18);
+      border-radius: 16px; padding: 2.5rem; text-align: center;
+      cursor: pointer; transition: all 0.35s ease;
+      position: relative; background: rgba(0,229,255,0.012);
+      margin-bottom: 1.25rem; overflow: hidden;
+    }
+
+    .upload-zone::after {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(circle at var(--mx,50%) var(--my,50%), rgba(0,229,255,0.07) 0%, transparent 60%);
+      opacity: 0; transition: opacity 0.3s; pointer-events: none;
+    }
+
+    .upload-zone:hover::after, .upload-zone.drag-over::after { opacity: 1; }
+    .upload-zone:hover, .upload-zone.drag-over {
+      border-color: rgba(0,229,255,0.45);
+      background: rgba(0,229,255,0.04);
+      box-shadow: 0 0 40px rgba(0,229,255,0.07);
+      transform: scale(1.01);
+    }
+
+    .upload-zone input[type="file"] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+
+    .upload-icon {
+      width: 52px; height: 52px; margin: 0 auto 1rem; color: var(--cyan);
+      opacity: 0.6; transition: transform 0.3s, opacity 0.3s;
+    }
+    .upload-zone:hover .upload-icon { transform: translateY(-4px); opacity: 1; }
+
+    .upload-title { font-size: 1rem; font-weight: 600; margin-bottom: 0.3rem; }
+    .upload-hint { font-size: 0.78rem; color: var(--muted); font-family: 'Space Mono', monospace; }
+
+    .preview-wrap { display: none; position: relative; margin-bottom: 1.25rem; }
+    .preview-wrap.visible { display: block; animation: fadeIn 0.4s ease; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .preview-img { width: 100%; max-height: 220px; object-fit: cover; border-radius: 12px; border: 1px solid var(--border); }
+
+    .preview-name {
+      position: absolute; bottom: 10px; left: 10px;
+      background: rgba(6,8,15,0.9); border: 1px solid var(--border);
+      border-radius: 8px; padding: 4px 10px;
+      font-family: 'Space Mono', monospace; font-size: 11px; color: var(--cyan);
+    }
+
+    .preview-change {
+      position: absolute; bottom: 10px; right: 10px;
+      background: rgba(6,8,15,0.9); border: 1px solid rgba(255,0,170,0.2);
+      border-radius: 8px; padding: 4px 10px;
+      font-family: 'Space Mono', monospace; font-size: 11px; color: var(--muted);
+      cursor: pointer; transition: color 0.2s, border-color 0.2s;
+    }
+    .preview-change:hover { color: var(--magenta); border-color: rgba(255,0,170,0.4); }
+
+    /* ── Fields ── */
+    label.field-label {
+      display: block; font-size: 0.75rem; font-family: 'Space Mono', monospace;
+      letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.55rem;
+    }
+
+    textarea {
+      width: 100%; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 13px; padding: 1rem 1.1rem;
+      font-family: 'Space Mono', monospace; font-size: 0.88rem; color: var(--text);
+      resize: vertical; min-height: 110px;
+      transition: border-color 0.25s, box-shadow 0.25s; margin-bottom: 1.25rem;
+    }
+
+    textarea:focus {
+      outline: none; border-color: rgba(0,229,255,0.4);
+      box-shadow: 0 0 0 3px rgba(0,229,255,0.05), 0 0 20px rgba(0,229,255,0.04);
+    }
+
+    textarea::placeholder { color: var(--muted); }
+
+    .char-row {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-top: -1rem; margin-bottom: 1.25rem;
+    }
+    .char-count { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--muted); }
+    .char-bar { height: 2px; width: 80px; background: var(--border); border-radius: 2px; overflow: hidden; }
+    .char-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--cyan), var(--magenta));
+      border-radius: 2px; transition: width 0.3s ease; width: 0%;
+    }
+
+    /* ── Button ── */
+    .btn-submit {
+      width: 100%; padding: 16px 24px;
+      background: linear-gradient(135deg, rgba(0,229,255,0.1), rgba(255,0,170,0.06));
+      border: 1px solid rgba(0,229,255,0.28); border-radius: 13px;
+      font-family: 'Outfit', sans-serif; font-size: 1rem; font-weight: 700;
+      color: var(--cyan); cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      letter-spacing: 0.02em; position: relative; overflow: hidden;
+    }
+
+    .btn-submit::before {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(135deg, rgba(0,229,255,0.16), rgba(255,0,170,0.1));
+      opacity: 0; transition: opacity 0.3s;
+    }
+    .btn-submit:hover::before { opacity: 1; }
+    .btn-submit:hover {
+      box-shadow: 0 0 40px rgba(0,229,255,0.16), 0 0 20px rgba(255,0,170,0.08), 0 8px 24px rgba(0,0,0,0.3);
+      transform: translateY(-2px) scale(1.01);
+      border-color: rgba(0,229,255,0.5);
+    }
+    .btn-submit:active { transform: translateY(0) scale(0.99); }
+    .btn-submit.loading { opacity: 0.7; pointer-events: none; }
+
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2px solid rgba(0,229,255,0.2);
+      border-top-color: var(--cyan);
+      border-radius: 50%; animation: spin 0.7s linear infinite;
+      display: none; flex-shrink: 0;
+    }
+    .btn-submit.loading .spinner { display: block; }
+    .btn-submit.loading .btn-text { display: none; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Result ── */
+    .result-box {
+      display: none; margin-top: 1.25rem; border-radius: 14px;
+      padding: 1.25rem 1.5rem; border: 1px solid;
+      animation: fadeIn 0.4s ease; word-break: break-word;
+    }
+    .result-box.success { background: rgba(0,229,255,0.04); border-color: rgba(0,229,255,0.18); }
+    .result-box.error   { background: rgba(255,77,109,0.04); border-color: rgba(255,77,109,0.18); }
+
+    .result-label {
+      font-family: 'Space Mono', monospace; font-size: 10px;
+      letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 0.55rem;
+    }
+    .result-box.success .result-label { color: var(--cyan); }
+    .result-box.error   .result-label { color: var(--danger); }
+    .result-text { font-family: 'Space Mono', monospace; font-size: 0.88rem; line-height: 1.65; }
+    .result-box.success .result-text { color: var(--cyan); }
+    .result-box.error   .result-text { color: var(--danger); }
+
+    /* ── Divider ── */
+    .divider { display: flex; align-items: center; gap: 12px; margin: 2rem 0; }
+    .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+    .divider-text { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--muted); letter-spacing: 0.14em; }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center; margin-top: 3rem;
+      font-family: 'Space Mono', monospace; font-size: 11px; color: var(--muted);
+      animation: fadeUp 0.8s 0.3s ease both;
+    }
+    footer .c { color: var(--cyan); }
+    footer .m { color: var(--magenta); }
+
+    /* ── Cursor glow ── */
+    .cursor-glow {
+      position: fixed; width: 320px; height: 320px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(0,229,255,0.04) 0%, transparent 70%);
+      pointer-events: none; transform: translate(-50%, -50%); z-index: 0;
+    }
+
+    @media (max-width: 520px) {
+      .tab-btn span.tab-label { display: none; }
+      .panel { padding: 1.25rem; }
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="particle-canvas"></canvas>
+<div class="cursor-glow" id="cursor-glow"></div>
+
+<div class="container">
+
+  <header>
+    <div class="logo-badge">
+      <div class="logo-dot"></div>
+      KENNENTH LSB Steganography
+    </div>
+
+    <!--
+      FIX DESCENDER CLIPPING:
+      The wrapper provides vertical padding so background-clip paint area
+      covers the full glyph including descenders (g, p, y, q, j).
+      Negative margin keeps layout height identical to before.
+      overflow:visible on both ensures NO ancestor clips the paint.
+    -->
+    <div class="h1-wrap">
+      <h1>StegoCrypt</h1>
+    </div>
+
+    <p class="subtitle">// sembunyikan pesanmu. tak terlihat, tak terdeteksi.</p>
+  </header>
+
+  <div class="tab-row">
+    <button class="tab-btn active" onclick="switchTab('encode', this)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/>
+      </svg>
+      <span class="tab-label">Encode</span>
+    </button>
+    <button class="tab-btn" onclick="switchTab('decode', this)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 21l-4.35-4.35"/><circle cx="11" cy="11" r="8"/>
+        <path d="M8 11h6M11 8v6"/>
+      </svg>
+      <span class="tab-label">Decode</span>
+    </button>
+  </div>
+
+  <div class="panel-wrap" id="panel-wrap">
+
+    <!-- ENCODE -->
+    <div class="panel active" id="panel-encode">
+      <label class="field-label">01 — Upload gambar carrier</label>
+      <div class="upload-zone" id="encode-zone"
+           ondragover="drag(event,this)" ondragleave="dragLeave(this)" ondrop="drop(event,'encode-file','encode-preview')"
+           onmousemove="zoneMouseMove(event,this)">
+        <input type="file" id="encode-file" accept="image/*" onchange="preview(this,'encode-preview','encode-zone')">
+        <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+        </svg>
+        <p class="upload-title">Drag & drop atau klik untuk pilih</p>
+        <p class="upload-hint">PNG, JPG, BMP — maks. 10MB</p>
+      </div>
+      <div class="preview-wrap" id="encode-preview">
+        <img class="preview-img" id="encode-img" src="" alt="preview">
+        <span class="preview-name" id="encode-fname"></span>
+        <span class="preview-change" onclick="resetPreview('encode')">↺ ganti</span>
+      </div>
+
+      <div class="divider"><span class="divider-text">pesan rahasia</span></div>
+
+      <label class="field-label" for="msg">02 — Tulis pesan tersembunyi</label>
+      <textarea id="msg" placeholder="Ketik pesanmu di sini..." onkeyup="updateCount()"></textarea>
+      <div class="char-row">
+        <span class="char-count" id="char-count">0 karakter</span>
+        <div class="char-bar"><div class="char-bar-fill" id="char-bar-fill"></div></div>
+      </div>
+
+      <button class="btn-submit" id="encode-btn" onclick="submitForm('/encode','encode-btn','encode-result','encode')">
+        <div class="spinner"></div>
+        <span class="btn-text">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+          Encode &amp; Download Gambar
+        </span>
+      </button>
+      <div class="result-box" id="encode-result"></div>
+    </div>
+
+    <!-- DECODE -->
+    <div class="panel" id="panel-decode">
+      <label class="field-label">01 — Upload gambar yang sudah di-encode</label>
+      <div class="upload-zone" id="decode-zone"
+           ondragover="drag(event,this)" ondragleave="dragLeave(this)" ondrop="drop(event,'decode-file','decode-preview')"
+           onmousemove="zoneMouseMove(event,this)">
+        <input type="file" id="decode-file" accept="image/*" onchange="preview(this,'decode-preview','decode-zone')">
+        <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+        </svg>
+        <p class="upload-title">Drag & drop atau klik untuk pilih</p>
+        <p class="upload-hint">PNG, JPG, BMP — gambar yang sudah di-encode</p>
+      </div>
+      <div class="preview-wrap" id="decode-preview">
+        <img class="preview-img" id="decode-img" src="" alt="preview">
+        <span class="preview-name" id="decode-fname"></span>
+        <span class="preview-change" onclick="resetPreview('decode')">↺ ganti</span>
+      </div>
+
+      <div style="margin-top: 1.5rem;">
+        <button class="btn-submit" id="decode-btn" onclick="submitForm('/decode','decode-btn','decode-result','decode')">
+          <div class="spinner"></div>
+          <span class="btn-text">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px">
+              <path d="M21 21l-4.35-4.35"/><circle cx="11" cy="11" r="8"/>
+            </svg>
+            Ekstrak Pesan Tersembunyi
+          </span>
+        </button>
+      </div>
+      <div class="result-box" id="decode-result"></div>
+    </div>
+
+  </div>
+
+  <footer>
+    Kennenth Steganography
+  </footer>
+</div>
+
+<script>
+  function switchTab(id, btn) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-' + id).classList.add('active');
+  }
+
+  function preview(input, previewId, zoneId) {
+    const file = input.files[0]; if (!file) return;
+    const suffix = previewId === 'encode-preview' ? 'encode' : 'decode';
+    const reader = new FileReader();
+    reader.onload = e => {
+      document.getElementById(suffix + '-img').src = e.target.result;
+      document.getElementById(suffix + '-fname').textContent = file.name;
+      document.getElementById(previewId).classList.add('visible');
+      document.getElementById(zoneId).style.display = 'none';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function resetPreview(suffix) {
+    document.getElementById(suffix + '-preview').classList.remove('visible');
+    document.getElementById(suffix + '-zone').style.display = '';
+    document.getElementById(suffix + '-file').value = '';
+  }
+
+  function drag(e, zone) { e.preventDefault(); zone.classList.add('drag-over'); }
+  function dragLeave(zone) { zone.classList.remove('drag-over'); }
+
+  function drop(e, inputId, previewId) {
+    e.preventDefault();
+    const zone = e.currentTarget; zone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0]; if (!file) return;
+    const input = document.getElementById(inputId);
+    const dt = new DataTransfer(); dt.items.add(file); input.files = dt.files;
+    preview(input, previewId, zone.id);
+  }
+
+  function updateCount() {
+    const n = document.getElementById('msg').value.length;
+    document.getElementById('char-count').textContent = n + ' karakter';
+    document.getElementById('char-bar-fill').style.width = Math.min(100, n / 5) + '%';
+  }
+
+  function zoneMouseMove(e, zone) {
+    const r = zone.getBoundingClientRect();
+    zone.style.setProperty('--mx', ((e.clientX - r.left) / r.width * 100).toFixed(1) + '%');
+    zone.style.setProperty('--my', ((e.clientY - r.top)  / r.height * 100).toFixed(1) + '%');
+  }
+
+  // 3D tilt
+  const panelWrap = document.getElementById('panel-wrap');
+  panelWrap.addEventListener('mousemove', e => {
+    const p = panelWrap.querySelector('.panel.active'); if (!p) return;
+    const r = p.getBoundingClientRect();
+    const dx = (e.clientX - (r.left + r.width/2))  / (r.width/2);
+    const dy = (e.clientY - (r.top  + r.height/2)) / (r.height/2);
+    p.style.transform = `perspective(1200px) rotateY(${dx*2}deg) rotateX(${-dy*1.5}deg)`;
+  });
+  panelWrap.addEventListener('mouseleave', () => {
+    const p = panelWrap.querySelector('.panel.active'); if (p) p.style.transform = '';
+  });
+
+  // Cursor glow
+  const cg = document.getElementById('cursor-glow');
+  document.addEventListener('mousemove', e => { cg.style.left = e.clientX + 'px'; cg.style.top = e.clientY + 'px'; });
+
+  // Particles
+  const cv = document.getElementById('particle-canvas');
+  const cx = cv.getContext('2d');
+  let W, H;
+  const resize = () => { W = cv.width = innerWidth; H = cv.height = innerHeight; };
+  resize(); addEventListener('resize', resize);
+
+  const PAL = [[0,229,255],[255,0,170],[0,180,255],[200,0,255]];
+  class Dot {
+    constructor() { this.init(); }
+    init() {
+      this.x = Math.random()*W; this.y = Math.random()*H;
+      this.r = Math.random()*1.3+0.3;
+      this.vx = (Math.random()-.5)*.25; this.vy = -Math.random()*.35-.1;
+      this.t = 0; this.life = Math.random()*.4+.3;
+      this.col = PAL[Math.floor(Math.random()*PAL.length)];
+    }
+    step() { this.x+=this.vx; this.y+=this.vy; this.t+=.002; if(this.t>this.life||this.y<-8) this.init(); }
+    draw() {
+      const a = Math.sin((this.t/this.life)*Math.PI)*.55;
+      cx.beginPath(); cx.arc(this.x,this.y,this.r,0,Math.PI*2);
+      cx.fillStyle=`rgba(${this.col[0]},${this.col[1]},${this.col[2]},${a})`; cx.fill();
+    }
+  }
+
+  const dots = Array.from({length:90},()=>new Dot());
+  (function loop(){ cx.clearRect(0,0,W,H); dots.forEach(d=>{d.step();d.draw();}); requestAnimationFrame(loop); })();
+
+  // Submit
+  async function submitForm(action, btnId, resultId, mode) {
+    const btn=document.getElementById(btnId), rb=document.getElementById(resultId), fi=document.getElementById(mode+'-file');
+    if(!fi.files.length){showResult(rb,'error','Pilih gambar terlebih dahulu!');return;}
+    if(mode==='encode'&&!document.getElementById('msg').value.trim()){showResult(rb,'error','Pesan tidak boleh kosong!');return;}
+    btn.classList.add('loading'); rb.style.display='none';
+    const fd=new FormData(); fd.append('image',fi.files[0]);
+    if(mode==='encode') fd.append('message',document.getElementById('msg').value);
+    try {
+      const res=await fetch(action,{method:'POST',body:fd});
+      if(mode==='encode'){
+        if(res.ok){const b=await res.blob(),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='encoded_stego.png';a.click();URL.revokeObjectURL(u);showResult(rb,'success','✓ Gambar berhasil di-encode dan diunduh!');}
+        else showResult(rb,'error','Gagal encode. Coba lagi.');
+      } else {
+        const t=await res.text(); res.ok?showResult(rb,'success',t):showResult(rb,'error',t||'Tidak ada pesan tersembunyi ditemukan.');
+      }
+    } catch{ showResult(rb,'error','Koneksi ke server gagal. Pastikan Flask berjalan.'); }
+    btn.classList.remove('loading');
+  }
+
+  function showResult(box,type,msg){
+    box.className='result-box '+type;
+    box.innerHTML=`<div class="result-label">${type==='success'?'// output':'// error'}</div><div class="result-text">${msg}</div>`;
+    box.style.display='block';
+  }
+</script>
+</body>
+</html>
